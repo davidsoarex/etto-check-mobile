@@ -39,7 +39,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     <EttoLoginScreen
       portalLabel="E•Check"
       title="Entrar"
-      description="Use seu CPF e a senha transacional de 4 dígitos para registrar as fotos das rotinas."
+      description="Use seu CPF e a senha transacional de 4 dígitos para registrar fotos ou validar registros, conforme seu perfil."
     >
       <form className="min-w-0 space-y-4" onSubmit={submitLogin}>
         <label className="grid gap-1.5">

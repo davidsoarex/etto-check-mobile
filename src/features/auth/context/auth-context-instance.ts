@@ -10,6 +10,9 @@ export type AuthContextValue = {
   isAuthenticated: boolean
   collaboratorName: string
   portalToken: string | null
+  isSupervisor: boolean
+  hasRoutineAccess: boolean
+  canValidateSubmissions: boolean
   login: (input: LoginInput) => Promise<void>
   logout: () => void
 }

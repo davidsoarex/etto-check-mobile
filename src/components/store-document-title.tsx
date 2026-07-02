@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { applyEttoDocumentTitle } from '@/lib/document-title'
 import { fetchStoreTradeName } from '@/lib/store-bootstrap'
 
-const PRODUCT_LABEL = 'E•Check'
+const PRODUCT_LABEL = 'Check'
 
 export function StoreDocumentTitle() {
   useEffect(() => {

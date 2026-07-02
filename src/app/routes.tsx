@@ -3,6 +3,8 @@ import { LoginPage } from '@/features/auth/pages/login-page'
 import { ProtectedRoute } from '@/features/auth/components/protected-route'
 import { HomePage } from '@/features/check/pages/home-page'
 import { RoutinePage } from '@/features/check/pages/routine-page'
+import { ValidationDetailPage } from '@/features/check/pages/validation-detail-page'
+import { ValidationListPage } from '@/features/check/pages/validation-list-page'
 import type { LoginInput } from '@/features/auth/context/auth-context-instance'
 
 type AppRoutesProps = {
@@ -32,6 +34,22 @@ export function AppRoutes({ isAuthenticated, onLogin }: AppRoutesProps) {
         element={
           <ProtectedRoute isAuthenticated={isAuthenticated}>
             <RoutinePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/validacao"
+        element={
+          <ProtectedRoute isAuthenticated={isAuthenticated}>
+            <ValidationListPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/validacao/:submissionId"
+        element={
+          <ProtectedRoute isAuthenticated={isAuthenticated}>
+            <ValidationDetailPage />
           </ProtectedRoute>
         }
       />

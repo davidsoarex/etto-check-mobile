@@ -8,13 +8,18 @@ export type EcheckLoginInput = {
 
 export type EcheckLoginResponse = {
   token: string
-  collaborator: { id: number; name: string }
+  collaborator: EcheckPortalProfile
 }
 
-export type EcheckMeResponse = {
+export type EcheckPortalProfile = {
   id: number
   name: string
+  isSupervisor: boolean
+  hasRoutineAccess: boolean
+  canValidateSubmissions: boolean
 }
+
+export type EcheckMeResponse = EcheckPortalProfile
 
 export type EcheckTaskPhoto = {
   id: number | null
@@ -123,4 +128,68 @@ export async function fetchEcheckPhotoBlob(token: string, photoId: number): Prom
   if (!response.ok) throw new Error('Não foi possível carregar a foto.')
   const blob = await response.blob()
   return URL.createObjectURL(blob)
+}
+
+export type EcheckSupervisorValidationRow = {
+  id: number
+  routineId: number
+  collaboratorId: number
+  referenceDate: string
+  status: string
+  submittedAt: string | null
+  routineName: string | null
+  collaboratorName: string | null
+}
+
+export type EcheckSupervisorValidationDetail = {
+  id: number
+  routineId: number
+  collaboratorId: number
+  referenceDate: string
+  status: string
+  submittedAt: string | null
+  routineName: string | null
+  collaboratorName: string | null
+  tasks: Array<{
+    id: number
+    title: string
+    instructions: string | null
+    photo: { id: number; takenAt: string | null } | null
+  }>
+}
+
+export async function fetchSupervisorPendingValidations(
+  token: string,
+): Promise<{ data: EcheckSupervisorValidationRow[] }> {
+  return requestEcheck<{ data: EcheckSupervisorValidationRow[] }>(
+    'echeck_portal/supervisor/validations',
+    {},
+    token,
+  )
+}
+
+export async function fetchSupervisorValidationDetail(
+  token: string,
+  submissionId: number,
+): Promise<EcheckSupervisorValidationDetail> {
+  return requestEcheck<EcheckSupervisorValidationDetail>(
+    `echeck_portal/supervisor/submissions/${submissionId}`,
+    {},
+    token,
+  )
+}
+
+export async function validateSupervisorSubmission(
+  token: string,
+  submissionId: number,
+  body: { status: 'approved' | 'rejected'; validationNotes?: string | null },
+): Promise<{ ok: boolean }> {
+  return requestEcheck<{ ok: boolean }>(
+    `echeck_portal/supervisor/submissions/${submissionId}/validate`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    },
+    token,
+  )
 }
