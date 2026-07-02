@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { EttoAppFooter } from '@/components/etto-app-footer'
 import { EttoAppShellBg } from '@/components/etto-app-shell-bg'
 
 type EttoLoginScreenProps = {
@@ -35,6 +36,8 @@ export function EttoLoginScreen({ portalLabel, title, description, children }: E
           ) : null}
           <div className="mt-4 min-w-0 sm:mt-5">{children}</div>
         </div>
+
+        <EttoAppFooter onDark className="mt-6 shrink-0" />
       </div>
     </div>
   )

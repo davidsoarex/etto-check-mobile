@@ -1,4 +1,5 @@
 import { EttoAppShellBg } from '@/components/etto-app-shell-bg'
+import { EttoAppFooter } from '@/components/etto-app-footer'
 import { useAuth } from '@/features/auth/context/use-auth'
 import { useLocation } from 'react-router-dom'
 import { AppRoutes } from './routes'
@@ -50,6 +51,7 @@ export function AppShell() {
 
       <main className="min-w-0 space-y-3 px-3 py-3">
         <AppRoutes isAuthenticated={isAuthenticated} onLogin={login} onLogout={logout} />
+        <EttoAppFooter compact className="pt-2" />
       </main>
     </div>
   )
