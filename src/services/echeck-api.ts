@@ -60,7 +60,12 @@ async function requestEcheck<T>(path: string, options: RequestInit = {}, token?:
     headers.set('X-Collaborator-Portal-Token', token)
   }
 
-  const response = await fetch(`${API_BASE_URL}/${path}`, { ...options, headers })
+  let response: Response
+  try {
+    response = await fetch(`${API_BASE_URL}/${path}`, { ...options, headers })
+  } catch {
+    throw new Error('Não foi possível conectar ao servidor. Verifique sua internet e tente novamente.')
+  }
   const body = await response.json().catch(() => null)
   if (!response.ok) {
     throw new Error(readPortalErrorMessage(body, response.status))
@@ -121,9 +126,15 @@ export function echeckPhotoUrl(token: string, photoId: number): string {
 }
 
 /** Busca foto autenticada e retorna blob URL para exibição. */
-export async function fetchEcheckPhotoBlob(token: string, photoId: number): Promise<string> {
-  const response = await fetch(`${API_BASE_URL}/echeck_portal/photos/${photoId}`, {
+export async function fetchEcheckPhotoBlob(
+  token: string,
+  photoId: number,
+  takenAt?: string | null,
+): Promise<string> {
+  const cacheKey = takenAt ? encodeURIComponent(takenAt) : '0'
+  const response = await fetch(`${API_BASE_URL}/echeck_portal/photos/${photoId}?v=${cacheKey}`, {
     headers: { 'X-Collaborator-Portal-Token': token },
+    cache: 'no-store',
   })
   if (!response.ok) throw new Error('Não foi possível carregar a foto.')
   const blob = await response.blob()

@@ -28,6 +28,7 @@ export function readPortalErrorMessage(body: unknown, status: number): string {
   }
 
   if (status === 401) return 'Sessão expirada. Entre novamente com CPF e senha.'
+  if (status === 413) return 'A foto é grande demais. Tente outra imagem ou reduza o tamanho.'
   if (status === 422) return 'Verifique o CPF e a senha transacional (4 dígitos).'
   if (status >= 500) return 'Servidor indisponível no momento. Tente novamente em instantes.'
   return 'Erro ao comunicar com o servidor.'
