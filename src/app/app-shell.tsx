@@ -38,8 +38,8 @@ export function AppShell() {
   }
 
   return (
-    <div className="mx-auto w-full min-h-dvh max-w-md overflow-x-hidden bg-[#f3f6ff] pb-8">
-      <header className="sticky top-0 z-10 border-b border-slate-200/80 bg-[#f3f6ff]/95 px-4 py-3 backdrop-blur">
+    <div className="safe-pb-shell mx-auto w-full min-h-dvh max-w-md overflow-x-hidden bg-[#f3f6ff]">
+      <header className="safe-pt-header sticky top-0 z-10 border-b border-slate-200/80 bg-[#f3f6ff]/95 px-4 pb-3 backdrop-blur">
         <div className="flex items-center gap-2">
           <img src="/etto-mark.png" alt="E•tto" className="h-8 w-8 object-contain" draggable={false} />
           <p className="text-sm font-semibold text-slate-900">E•Check</p>

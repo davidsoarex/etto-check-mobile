@@ -53,6 +53,22 @@
   }
 }
 
+@layer utilities {
+  /**
+   * Safe area iOS (PWA com viewport-fit=cover + status-bar black-translucent).
+   * CSS puro: calc() no Tailwind sem espaços em torno de + quebra no Safari.
+   */
+  .safe-pt-header {
+    padding-top: calc(constant(safe-area-inset-top) + 0.75rem);
+    padding-top: calc(env(safe-area-inset-top, 0px) + 0.75rem);
+  }
+
+  .safe-pb-shell {
+    padding-bottom: calc(2rem + constant(safe-area-inset-bottom));
+    padding-bottom: calc(2rem + env(safe-area-inset-bottom, 0px));
+  }
+}
+
 @layer components {
   .etto-btn-primary {
     @apply w-full rounded-xl border-0 py-3 text-base font-semibold text-white transition-colors sm:text-sm;
