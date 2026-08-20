@@ -5,7 +5,7 @@ APP="${1:?Informe cardapio, entregas, colaborador ou check}"
 STAGING="${2:?Informe o diretório com o build (index.html)}"
 
 case "${APP}" in
-  cardapio | entregas | colaborador | check) ;;
+  cardapio | entregas | colaborador | check | menu) ;;
   *)
     echo "ERRO: app invalido (${APP})"
     exit 1

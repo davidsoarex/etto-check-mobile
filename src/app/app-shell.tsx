@@ -42,10 +42,7 @@ export function AppShell() {
       <header className="sticky top-0 z-10 border-b border-slate-200/80 bg-[#f3f6ff]/95 px-4 py-3 backdrop-blur">
         <div className="flex items-center gap-2">
           <img src="/etto-mark.png" alt="E•tto" className="h-8 w-8 object-contain" draggable={false} />
-          <div>
-            <p className="text-sm font-semibold text-slate-900">E•Check</p>
-            <p className="text-[10px] uppercase tracking-wide text-slate-500">Registro fotográfico</p>
-          </div>
+          <p className="text-sm font-semibold text-slate-900">E•Check</p>
         </div>
       </header>
 
