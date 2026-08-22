@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react'
+import { useEffect, useRef, type PointerEvent, type ReactNode } from 'react'
 import { Minus, Plus } from 'lucide-react'
 import {
   computeTotalFromPackages,
@@ -6,6 +6,7 @@ import {
   type ConferencePackageDef,
   type PackageBreakdown,
 } from '@/features/activities/lib/package-count'
+import { qtyStepForUnit } from '@/features/activities/lib/qty-helpers'
 
 type Props = {
   packages: ConferencePackageDef[]
@@ -81,6 +82,11 @@ function PackageStepper({
     startHold(dir)
   }
 
+  const display =
+    Number.isInteger(count) || Math.abs(count - Math.round(count)) < 0.0005
+      ? String(Math.round(count))
+      : String(Math.round(count * 1000) / 1000)
+
   return (
     <div className="flex items-center justify-between gap-2">
       <p className="min-w-0 flex-1 text-xs font-semibold text-slate-700">{label}</p>
@@ -97,7 +103,7 @@ function PackageStepper({
           <Minus className="size-4" />
         </button>
         <span className="min-w-[2.5rem] text-center text-base font-bold tabular-nums text-slate-900">
-          {count}
+          {display}
         </span>
         <button
           type="button"
@@ -125,8 +131,15 @@ export function PackageCountInput({
   embedded,
   header,
 }: Props) {
-  const [showLoose, setShowLoose] = useState(value.loose > 0)
   const unitLabel = (unit ?? '').trim() || 'un'
+  const isUnitCount =
+    unitLabel.toLowerCase() === 'un' ||
+    unitLabel.toLowerCase() === 'und' ||
+    unitLabel.toLowerCase() === 'unidade' ||
+    unitLabel.toLowerCase() === 'unidades'
+  const packWord = isUnitCount ? 'Fardos' : 'Pacotes'
+  const looseLabel = isUnitCount ? 'Unidades soltas' : 'Quantidade avulsa'
+  const looseStep = isUnitCount ? 1 : qtyStepForUnit(unit)
   const sorted = [...packages].sort((a, b) => {
     if (a.isDefault && !b.isDefault) return -1
     if (!a.isDefault && b.isDefault) return 1
@@ -137,6 +150,14 @@ export function PackageCountInput({
   const setCount = (quantity: number, nextCount: number) => {
     const counts = { ...value.counts, [quantity]: Math.max(0, Math.floor(nextCount)) }
     onChange({ counts, loose: value.loose })
+  }
+
+  const setLoose = (nextLoose: number) => {
+    const rounded =
+      looseStep >= 1
+        ? Math.max(0, Math.floor(nextLoose))
+        : Math.max(0, Math.round(nextLoose * 1000) / 1000)
+    onChange({ counts: value.counts, loose: rounded })
   }
 
   return (
@@ -157,7 +178,7 @@ export function PackageCountInput({
           return (
             <div key={pkg.quantity} className="space-y-1">
               <PackageStepper
-                label={`Pacotes de ${pkg.quantity} ${unitLabel}${pkg.isDefault ? ' (padrão)' : ''}`}
+                label={`${packWord} de ${pkg.quantity} ${unitLabel}${pkg.isDefault ? ' (padrão)' : ''}`}
                 count={count}
                 disabled={disabled}
                 onBump={(dir) => setCount(pkg.quantity, count + dir)}
@@ -170,36 +191,20 @@ export function PackageCountInput({
           )
         })}
 
-        {showLoose ? (
-          <label className="block space-y-1 border-t border-teal-100 pt-2">
-            <span className="text-[11px] font-semibold text-slate-600">Avulso (exceção)</span>
-            <input
-              type="text"
-              inputMode="decimal"
-              disabled={disabled}
-              value={value.loose ? String(value.loose) : ''}
-              onChange={(e) => {
-                const n = Number(String(e.target.value).replace(',', '.'))
-                onChange({
-                  counts: value.counts,
-                  loose: Number.isFinite(n) && n > 0 ? Math.round(n * 1000) / 1000 : 0,
-                })
-              }}
-              onBlur={() => onCommit?.()}
-              className="min-h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-sm font-semibold tabular-nums"
-              placeholder="0"
-            />
-          </label>
-        ) : (
-          <button
-            type="button"
+        <div className="space-y-1 border-t border-teal-100 pt-2">
+          <PackageStepper
+            label={looseLabel}
+            count={value.loose}
             disabled={disabled}
-            className="text-[11px] font-semibold text-slate-500 underline-offset-2 hover:underline disabled:opacity-40"
-            onClick={() => setShowLoose(true)}
-          >
-            + Quantidade avulsa
-          </button>
-        )}
+            onBump={(dir) => setLoose(value.loose + dir * looseStep)}
+            onCommit={onCommit}
+          />
+          {value.loose > 0 ? (
+            <p className="text-right text-[10px] tabular-nums text-slate-500">
+              = {value.loose} {unitLabel}
+            </p>
+          ) : null}
+        </div>
 
         <p className="border-t border-teal-100 pt-2 text-right text-sm font-bold tabular-nums text-teal-950">
           TOTAL {total} {unitLabel}
