@@ -125,18 +125,29 @@ export function echeckPhotoUrl(token: string, photoId: number): string {
   return `${API_BASE_URL}/echeck_portal/photos/${photoId}?t=${encodeURIComponent(token)}`
 }
 
-/** Busca foto autenticada e retorna blob URL para exibição. */
+/** Busca foto autenticada e retorna blob URL para exibição. photo_id é imutável (retake = novo id). */
 export async function fetchEcheckPhotoBlob(
   token: string,
   photoId: number,
   takenAt?: string | null,
+  signal?: AbortSignal,
 ): Promise<string> {
   const cacheKey = takenAt ? encodeURIComponent(takenAt) : '0'
   const response = await fetch(`${API_BASE_URL}/echeck_portal/photos/${photoId}?v=${cacheKey}`, {
     headers: { 'X-Collaborator-Portal-Token': token },
-    cache: 'no-store',
+    // Cache privado do browser por photoId — retake gera id novo.
+    cache: 'force-cache',
+    signal,
   })
-  if (!response.ok) throw new Error('Não foi possível carregar a foto.')
+  if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      throw new Error('Sem permissão para ver esta foto.')
+    }
+    if (response.status === 404) {
+      throw new Error('Foto não encontrada.')
+    }
+    throw new Error('Não foi possível carregar a foto.')
+  }
   const blob = await response.blob()
   return URL.createObjectURL(blob)
 }
