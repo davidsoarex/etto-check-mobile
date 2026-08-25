@@ -23,14 +23,30 @@ export function computeTotalFromPackages(breakdown: PackageBreakdown): number {
 export function toApiBreakdown(
   packages: ConferencePackageDef[],
   breakdown: PackageBreakdown,
+  allowLoose = false,
 ): { packages: Array<{ quantity: number; count: number }>; loose: number } {
   return {
     packages: packages.map((p) => ({
       quantity: p.quantity,
       count: Math.max(0, Math.floor(breakdown.counts[p.quantity] ?? 0)),
     })),
-    loose: Math.max(0, Number(breakdown.loose) || 0),
+    loose: allowLoose ? Math.max(0, Number(breakdown.loose) || 0) : 0,
   }
+}
+
+/**
+ * API nova envia allowLoose; legado sem o campo → bebidas fardo 6/12.
+ */
+export function lineAllowsLoose(line: {
+  allowLoose?: boolean
+  packages?: ConferencePackageDef[] | null
+}): boolean {
+  if (line.allowLoose === true) return true
+  if (line.allowLoose === false) return false
+  const pkgs = line.packages ?? []
+  if (pkgs.length !== 1) return false
+  const q = Number(pkgs[0]?.quantity)
+  return q === 6 || q === 12
 }
 
 /** Heurística: preenche pacotes maiores primeiro; resto vira avulso. */

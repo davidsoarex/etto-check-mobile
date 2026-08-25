@@ -15,6 +15,11 @@ type Props = {
   onChange: (next: PackageBreakdown) => void
   onCommit?: () => void
   disabled?: boolean
+  /**
+   * Unidades soltas / avulsa — só bebidas (fardo 6/12).
+   * Salgados/pastéis e pacotes pré-definidos ficam só com os steppers de embalagem.
+   */
+  allowLoose?: boolean
   /** Quando true, remove borda/fundo próprios (já vem de um card pai). */
   embedded?: boolean
   header?: ReactNode
@@ -128,6 +133,7 @@ export function PackageCountInput({
   onChange,
   onCommit,
   disabled,
+  allowLoose = false,
   embedded,
   header,
 }: Props) {
@@ -145,14 +151,18 @@ export function PackageCountInput({
     if (!a.isDefault && b.isDefault) return 1
     return b.quantity - a.quantity
   })
-  const total = computeTotalFromPackages(value)
+  const effectiveValue: PackageBreakdown = allowLoose
+    ? value
+    : { counts: value.counts, loose: 0 }
+  const total = computeTotalFromPackages(effectiveValue)
 
   const setCount = (quantity: number, nextCount: number) => {
     const counts = { ...value.counts, [quantity]: Math.max(0, Math.floor(nextCount)) }
-    onChange({ counts, loose: value.loose })
+    onChange({ counts, loose: allowLoose ? value.loose : 0 })
   }
 
   const setLoose = (nextLoose: number) => {
+    if (!allowLoose) return
     const rounded =
       looseStep >= 1
         ? Math.max(0, Math.floor(nextLoose))
@@ -173,7 +183,7 @@ export function PackageCountInput({
       ) : null}
       <div className={embedded ? 'space-y-2.5' : 'space-y-2.5 px-3 py-2.5'}>
         {sorted.map((pkg) => {
-          const count = value.counts[pkg.quantity] ?? 0
+          const count = effectiveValue.counts[pkg.quantity] ?? 0
           const subtotal = Math.round(pkg.quantity * count * 1000) / 1000
           return (
             <div key={pkg.quantity} className="space-y-1">
@@ -191,20 +201,22 @@ export function PackageCountInput({
           )
         })}
 
-        <div className="space-y-1 border-t border-teal-100 pt-2">
-          <PackageStepper
-            label={looseLabel}
-            count={value.loose}
-            disabled={disabled}
-            onBump={(dir) => setLoose(value.loose + dir * looseStep)}
-            onCommit={onCommit}
-          />
-          {value.loose > 0 ? (
-            <p className="text-right text-[10px] tabular-nums text-slate-500">
-              = {value.loose} {unitLabel}
-            </p>
-          ) : null}
-        </div>
+        {allowLoose ? (
+          <div className="space-y-1 border-t border-teal-100 pt-2">
+            <PackageStepper
+              label={looseLabel}
+              count={effectiveValue.loose}
+              disabled={disabled}
+              onBump={(dir) => setLoose(effectiveValue.loose + dir * looseStep)}
+              onCommit={onCommit}
+            />
+            {effectiveValue.loose > 0 ? (
+              <p className="text-right text-[10px] tabular-nums text-slate-500">
+                = {effectiveValue.loose} {unitLabel}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
 
         <p className="border-t border-teal-100 pt-2 text-right text-sm font-bold tabular-nums text-teal-950">
           TOTAL {total} {unitLabel}
@@ -217,11 +229,14 @@ export function PackageCountInput({
 export function initialBreakdownFromLine(
   packages: ConferencePackageDef[],
   contado: number | null,
+  allowLoose = false,
 ): PackageBreakdown {
   if (contado == null || contado <= 0) {
     const counts: Record<number, number> = {}
     for (const p of packages) counts[p.quantity] = 0
     return { counts, loose: 0 }
   }
-  return decomposeContado(contado, packages)
+  const bd = decomposeContado(contado, packages)
+  if (allowLoose) return bd
+  return { counts: bd.counts, loose: 0 }
 }

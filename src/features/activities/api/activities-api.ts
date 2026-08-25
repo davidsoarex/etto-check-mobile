@@ -54,6 +54,8 @@ export type ConferenceLineDto = {
   registeredAt: string | null
   countMode?: 'free' | 'package_count'
   packages?: Array<{ quantity: number; isDefault?: boolean }> | null
+  /** Só package_count: permite unidades soltas (bebidas). */
+  allowLoose?: boolean
 }
 
 export type ConferenceActivityPayload = {

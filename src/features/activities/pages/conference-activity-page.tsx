@@ -22,6 +22,7 @@ import {
 } from '@/features/activities/lib/qty-helpers'
 import {
   computeTotalFromPackages,
+  lineAllowsLoose,
   toApiBreakdown,
   type PackageBreakdown,
 } from '@/features/activities/lib/package-count'
@@ -70,7 +71,11 @@ export function ConferenceActivityPage() {
       nextDraft[line.id] = formatted
       nextCommitted[line.id] = formatted
       if (isPackageLine(line) && line.packages) {
-        const bd = initialBreakdownFromLine(line.packages, line.contado)
+        const bd = initialBreakdownFromLine(
+          line.packages,
+          line.contado,
+          lineAllowsLoose(line),
+        )
         nextPkg[line.id] = bd
         nextPkgCommitted[line.id] = formatQtyDraft(computeTotalFromPackages(bd))
       }
@@ -115,7 +120,11 @@ export function ConferenceActivityPage() {
     setDraft((prev) => ({ ...prev, [updated.id]: formatted }))
     setCommitted((prev) => ({ ...prev, [updated.id]: formatted }))
     if (isPackageLine(updated) && updated.packages) {
-      const bd = initialBreakdownFromLine(updated.packages, updated.contado)
+      const bd = initialBreakdownFromLine(
+        updated.packages,
+        updated.contado,
+        lineAllowsLoose(updated),
+      )
       setPkgDraft((prev) => ({ ...prev, [updated.id]: bd }))
       setPkgCommitted((prev) => ({
         ...prev,
@@ -150,7 +159,11 @@ export function ConferenceActivityPage() {
         if (formatted === (pkgCommittedRef.current[lineId] ?? '') && line.contado != null) {
           return true
         }
-        packageBreakdown = toApiBreakdown(line.packages, bd)
+        packageBreakdown = toApiBreakdown(
+          line.packages,
+          bd,
+          lineAllowsLoose(line),
+        )
       } else {
         const raw = (draftRef.current[lineId] ?? '').trim()
         if (raw === '') return false
@@ -284,7 +297,12 @@ export function ConferenceActivityPage() {
               const packageMode = isPackageLine(line)
               const draftQty = packageMode
                 ? computeTotalFromPackages(
-                    pkgDraft[line.id] ?? initialBreakdownFromLine(line.packages ?? [], null),
+                    pkgDraft[line.id] ??
+                      initialBreakdownFromLine(
+                        line.packages ?? [],
+                        null,
+                        lineAllowsLoose(line),
+                      ),
                   )
                 : normalizeQtyForUnit(draft[line.id] ?? '', line.unit)
               const dirty = packageMode
@@ -328,10 +346,15 @@ export function ConferenceActivityPage() {
                       <PackageCountInput
                         packages={line.packages}
                         unit={line.unit}
+                        allowLoose={lineAllowsLoose(line)}
                         header={lineHeader}
                         value={
                           pkgDraft[line.id] ??
-                          initialBreakdownFromLine(line.packages, line.contado)
+                          initialBreakdownFromLine(
+                            line.packages,
+                            line.contado,
+                            lineAllowsLoose(line),
+                          )
                         }
                         onChange={(next) =>
                           setPkgDraft((prev) => ({
