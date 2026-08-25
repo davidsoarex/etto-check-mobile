@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Boxes, CheckSquare, ChevronLeft, ChevronRight, Home, ListTodo } from 'lucide-react'
 import { useAuth } from '@/features/auth/context/use-auth'
@@ -13,6 +13,8 @@ import {
 } from '@/features/activities/api/activities-api'
 import {
   activityPath,
+  collectInboxLocations,
+  filterInboxByLocation,
   filterInboxByScope,
   type ActivityInboxScope,
 } from '@/features/activities/lib/activity-inbox-scope'
@@ -74,8 +76,7 @@ function ActivityCard({
         ? 'Total'
         : null
   const Icon = scope === 'conferences' ? Boxes : ListTodo
-  const locationLabel =
-    scope === 'conferences' ? item.stockLocationName?.trim() || null : null
+  const locationLabel = item.stockLocationName?.trim() || null
   const leadLabel = scope === 'activities' ? typeLabel(item) : null
 
   return (
@@ -92,8 +93,14 @@ function ActivityCard({
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-2">
           <p className="truncate text-sm font-semibold text-slate-900">{item.titleSnapshot}</p>
-          {scope === 'conferences' && locationLabel ? (
-            <span className="shrink-0 rounded-full bg-teal-100 px-2 py-0.5 text-[10px] font-semibold text-teal-900">
+          {locationLabel ? (
+            <span
+              className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                scope === 'conferences'
+                  ? 'bg-teal-100 text-teal-900'
+                  : 'bg-slate-100 text-slate-700'
+              }`}
+            >
               {locationLabel}
             </span>
           ) : null}
@@ -143,8 +150,9 @@ type Props = {
 export function ActivitiesPage({ scope = 'activities' }: Props) {
   const { portalToken } = useAuth()
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const historyOnly = searchParams.get('view') === 'historico'
+  const locationFilter = searchParams.get('local')?.trim() || ''
   const date = todayIsoLocal()
   const [inboxRaw, setInboxRaw] = useState<ActivitiesInboxResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -161,7 +169,31 @@ export function ActivitiesPage({ scope = 'activities' }: Props) {
       ? 'Conferências'
       : 'Minhas atividades'
 
-  const inbox = inboxRaw ? filterInboxByScope(inboxRaw, scope) : null
+  const scopedInbox = useMemo(
+    () => (inboxRaw ? filterInboxByScope(inboxRaw, scope) : null),
+    [inboxRaw, scope],
+  )
+  const locations = useMemo(
+    () => (scopedInbox ? collectInboxLocations(scopedInbox) : []),
+    [scopedInbox],
+  )
+  const inbox = useMemo(() => {
+    if (!scopedInbox) return null
+    if (locationFilter && !locations.includes(locationFilter)) {
+      return filterInboxByLocation(scopedInbox, null)
+    }
+    return filterInboxByLocation(scopedInbox, locationFilter || null)
+  }, [scopedInbox, locationFilter, locations])
+
+  const setLocationFilter = useCallback(
+    (next: string) => {
+      const params = new URLSearchParams(searchParams)
+      if (!next) params.delete('local')
+      else params.set('local', next)
+      setSearchParams(params, { replace: true })
+    },
+    [searchParams, setSearchParams],
+  )
 
   const load = useCallback(async () => {
     if (!portalToken) return
@@ -231,6 +263,22 @@ export function ActivitiesPage({ scope = 'activities' }: Props) {
         inbox.summary.available === 0 &&
         inbox.summary.completed === 0)
 
+  const emptyBecauseFilter =
+    empty &&
+    Boolean(locationFilter) &&
+    scopedInbox &&
+    (historyOnly
+      ? scopedInbox.completed.length > 0
+      : scopedInbox.summary.inProgress +
+          scopedInbox.summary.pending +
+          scopedInbox.summary.available +
+          scopedInbox.summary.completed >
+        0)
+
+  const chipActive =
+    scope === 'conferences' ? 'bg-teal-700 text-white' : 'bg-brand-deep text-white'
+  const chipIdle = 'bg-slate-100 text-slate-700'
+
   return (
     <section className="space-y-3">
       <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
@@ -238,7 +286,11 @@ export function ActivitiesPage({ scope = 'activities' }: Props) {
           <div className="min-w-0 flex-1">
             {historyOnly ? (
               <Link
-                to={listPath}
+                to={
+                  locationFilter
+                    ? `${listPath}?local=${encodeURIComponent(locationFilter)}`
+                    : listPath
+                }
                 className="mb-1.5 inline-flex items-center gap-0.5 text-xs font-semibold text-brand-deep"
               >
                 <ChevronLeft className="size-3.5 shrink-0" aria-hidden />
@@ -253,7 +305,9 @@ export function ActivitiesPage({ scope = 'activities' }: Props) {
             </h1>
             {historyOnly ? null : (
               <Link
-                to={`${listPath}?view=historico`}
+                to={`${listPath}?view=historico${
+                  locationFilter ? `&local=${encodeURIComponent(locationFilter)}` : ''
+                }`}
                 className="mt-1.5 inline-block text-xs font-medium text-slate-600 underline-offset-2 hover:underline"
               >
                 Ver histórico de hoje
@@ -269,15 +323,47 @@ export function ActivitiesPage({ scope = 'activities' }: Props) {
             <Home className="size-4" strokeWidth={2} aria-hidden />
           </Link>
         </div>
+
+        {locations.length > 0 ? (
+          <div
+            className="mt-3 flex gap-1.5 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            role="group"
+            aria-label="Filtrar por local"
+          >
+            <button
+              type="button"
+              onClick={() => setLocationFilter('')}
+              className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                !locationFilter || !locations.includes(locationFilter) ? chipActive : chipIdle
+              }`}
+            >
+              Todos
+            </button>
+            {locations.map((loc) => (
+              <button
+                key={loc}
+                type="button"
+                onClick={() => setLocationFilter(loc)}
+                className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                  locationFilter === loc ? chipActive : chipIdle
+                }`}
+              >
+                {loc}
+              </button>
+            ))}
+          </div>
+        ) : null}
       </div>
 
       {loading ? <p className="px-1 text-sm text-slate-600">Carregando…</p> : null}
       {error ? <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p> : null}
       {empty ? (
         <p className="rounded-xl border border-slate-200 bg-white px-4 py-5 text-sm text-slate-600 shadow-sm">
-          {historyOnly
-            ? `Nenhuma ${scope === 'conferences' ? 'conferência concluída' : 'atividade concluída'} hoje.`
-            : `Nenhuma ${scope === 'conferences' ? 'conferência' : 'atividade'} para hoje.`}
+          {emptyBecauseFilter
+            ? `Nenhuma ${scope === 'conferences' ? 'conferência' : 'atividade'} em «${locationFilter}».`
+            : historyOnly
+              ? `Nenhuma ${scope === 'conferences' ? 'conferência concluída' : 'atividade concluída'} hoje.`
+              : `Nenhuma ${scope === 'conferences' ? 'conferência' : 'atividade'} para hoje.`}
         </p>
       ) : null}
 
