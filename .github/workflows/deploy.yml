@@ -54,17 +54,23 @@ jobs:
           ssh "root@${SERVER_IP}" \
             "bash /root/salgadetto-manager/remote-deploy-mobile-web.sh '${APP}' '${REMOTE_STAGING}' && rm -rf '${REMOTE_STAGING}'"
 
-      - name: Verificar site público
+      - name: Verificar sites públicos
         run: |
           set -euo pipefail
-          for i in $(seq 1 15); do
-            BODY="$(curl -fsS "https://check.salgadetto.com.br/" || true)"
-            if echo "$BODY" | grep -qi '<div id="root">'; then
-              echo "OK: E•Check online"
-              exit 0
+          for HOST in check.salgadetto.com.br check.etto.one; do
+            OK=0
+            for i in $(seq 1 15); do
+              BODY="$(curl -fsS "https://${HOST}/" || true)"
+              if echo "$BODY" | grep -qi '<div id="root">'; then
+                echo "OK: E•Check online em ${HOST}"
+                OK=1
+                break
+              fi
+              echo "Tentativa $i (${HOST}): aguardando HTML do SPA…"
+              sleep 4
+            done
+            if [ "${OK}" -ne 1 ]; then
+              echo "ERRO: ${HOST} não respondeu com o SPA"
+              exit 1
             fi
-            echo "Tentativa $i: aguardando HTML do SPA…"
-            sleep 4
           done
-          echo "ERRO: check não respondeu com o SPA"
-          exit 1

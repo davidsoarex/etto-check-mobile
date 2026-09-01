@@ -13,7 +13,12 @@ Abre em `http://localhost:5175` (porta configurada no Vite).
 
 ## Produção
 
-Subdomínio: `https://check.salgadetto.com.br`
+Produção (transição, os dois hosts servem o mesmo build):
+
+- `https://check.etto.one`
+- `https://check.salgadetto.com.br`
+
+Ícone PWA: coloque a arte em `branding/echeck-icon-source.png` (ou `.jpg`) e rode `npm run icons:generate`.
 
 Build:
 
