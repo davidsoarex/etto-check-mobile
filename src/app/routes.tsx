@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes, useSearchParams } from 'react-router-dom'
 import { LoginPage } from '@/features/auth/pages/login-page'
 import { ProtectedRoute } from '@/features/auth/components/protected-route'
 import { HomePage } from '@/features/check/pages/home-page'
@@ -12,6 +12,8 @@ import { ChecklistActivityPage } from '@/features/activities/pages/checklist-act
 import { SimpleTaskActivityPage } from '@/features/activities/pages/simple-task-activity-page'
 import { ReportIssuePage } from '@/features/activities/pages/report-issue-page'
 import { MyIssuesPage } from '@/features/activities/pages/my-issues-page'
+import { CheckTargetScanPage } from '@/features/check-targets/pages/check-target-scan-page'
+import { safeAppReturnPath } from '@/lib/safe-return-path'
 import type { LoginInput } from '@/features/auth/context/auth-context-instance'
 
 type AppRoutesProps = {
@@ -20,13 +22,33 @@ type AppRoutesProps = {
   onLogout?: () => void
 }
 
+function LoginRoute({
+  isAuthenticated,
+  onLogin,
+}: {
+  isAuthenticated: boolean
+  onLogin: (input: LoginInput) => Promise<void>
+}) {
+  const [params] = useSearchParams()
+  const returnTo = safeAppReturnPath(params.get('returnTo')) ?? '/inicio'
+  if (isAuthenticated) {
+    return <Navigate to={returnTo} replace />
+  }
+  return <LoginPage onLogin={onLogin} />
+}
+
 export function AppRoutes({ isAuthenticated, onLogin }: AppRoutesProps) {
   return (
     <Routes>
       <Route path="/" element={<Navigate to={isAuthenticated ? '/inicio' : '/login'} replace />} />
+      <Route path="/login" element={<LoginRoute isAuthenticated={isAuthenticated} onLogin={onLogin} />} />
       <Route
-        path="/login"
-        element={isAuthenticated ? <Navigate to="/inicio" replace /> : <LoginPage onLogin={onLogin} />}
+        path="/t/:token"
+        element={
+          <ProtectedRoute isAuthenticated={isAuthenticated}>
+            <CheckTargetScanPage />
+          </ProtectedRoute>
+        }
       />
       <Route
         path="/inicio"
