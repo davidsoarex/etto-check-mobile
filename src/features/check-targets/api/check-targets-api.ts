@@ -199,6 +199,54 @@ export async function cancelCheckExecution(
   )
 }
 
+export type PortalContextualIssue = {
+  id: number
+  title: string
+  description: string | null
+  checkTargetId: number | null
+  checkableItemId: number | null
+  locationLabel: string | null
+}
+
+export async function reportExecutionIssue(
+  token: string,
+  executionId: number,
+  input: { description: string; title?: string; operationalImpact?: string },
+): Promise<PortalContextualIssue> {
+  return requestJson<PortalContextualIssue>(
+    `echeck_portal/check_executions/${executionId}/issues`,
+    { method: 'POST', body: JSON.stringify(input) },
+    token,
+  )
+}
+
+export async function reportExecutionItemIssue(
+  token: string,
+  executionId: number,
+  itemId: number,
+  input: { description: string; title?: string; operationalImpact?: string },
+): Promise<PortalContextualIssue> {
+  return requestJson<PortalContextualIssue>(
+    `echeck_portal/check_executions/${executionId}/items/${itemId}/issues`,
+    { method: 'POST', body: JSON.stringify(input) },
+    token,
+  )
+}
+
+export async function uploadOperationalIssuePhoto(
+  token: string,
+  issueId: number,
+  file: File,
+): Promise<{ id: number }> {
+  const form = new FormData()
+  form.append('photo', file)
+  return requestJson<{ id: number }>(
+    `echeck_portal/issues/${issueId}/attachments`,
+    { method: 'POST', body: form },
+    token,
+  )
+}
+
 export async function fetchExecutionEvidenceBlob(
   token: string,
   evidenceId: number,

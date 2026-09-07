@@ -10,10 +10,13 @@ import {
   fetchCheckExecution,
   formatLastCompleted,
   kindLabel,
+  reportExecutionIssue,
+  reportExecutionItemIssue,
   resolveCheckTargetByToken,
   startOrResumeCheckExecution,
   updateCheckExecutionItem,
   uploadCheckExecutionEvidence,
+  uploadOperationalIssuePhoto,
   type PortalExecution,
   type PortalExecutionItem,
   type PortalResolveResponse,
@@ -27,20 +30,15 @@ function itemButtons(responseType: string): Array<{ result: string; label: strin
     return [
       { result: 'ok', label: 'OK' },
       { result: 'attention', label: 'Atenção' },
-      { result: 'problem', label: 'Problema' },
     ]
   }
   if (responseType === 'action') {
     return [
       { result: 'no_action', label: 'Nenhuma ação necessária', actionTaken: 'none' },
       { result: 'action_taken', label: 'Abastecido', actionTaken: 'refilled' },
-      { result: 'problem', label: 'Problema' },
     ]
   }
-  return [
-    { result: 'done', label: 'Concluído' },
-    { result: 'problem', label: 'Problema' },
-  ]
+  return [{ result: 'done', label: 'Concluído' }]
 }
 
 function itemDone(item: PortalExecutionItem): boolean {
@@ -58,7 +56,12 @@ export function CheckTargetScanPage() {
   const [savingItemId, setSavingItemId] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [activeItemIndex, setActiveItemIndex] = useState(0)
+  const [issueMode, setIssueMode] = useState<'item' | 'target' | null>(null)
+  const [issueDescription, setIssueDescription] = useState('')
+  const [issuePhoto, setIssuePhoto] = useState<File | null>(null)
+  const [issueSuccess, setIssueSuccess] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const issuePhotoInputRef = useRef<HTMLInputElement>(null)
   const pendingPhotoItemId = useRef<number | null>(null)
 
   const loadTarget = useCallback(() => {
@@ -199,6 +202,55 @@ export function CheckTargetScanPage() {
     }
   }
 
+  function openIssueForm(mode: 'item' | 'target') {
+    setIssueMode(mode)
+    setIssueDescription('')
+    setIssuePhoto(null)
+    setIssueSuccess(false)
+    setError(null)
+  }
+
+  function closeIssueForm() {
+    setIssueMode(null)
+    setIssueDescription('')
+    setIssuePhoto(null)
+    setIssueSuccess(false)
+  }
+
+  async function submitIssue() {
+    if (!portalToken || !execution || !issueMode || busy) return
+    const description = issueDescription.trim()
+    if (!description) {
+      setError('Descreva o problema.')
+      return
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      const issue =
+        issueMode === 'item'
+          ? await reportExecutionItemIssue(
+              portalToken,
+              execution.id,
+              execution.items[activeItemIndex]!.id,
+              { description },
+            )
+          : await reportExecutionIssue(portalToken, execution.id, { description })
+      if (issuePhoto) {
+        const { file } = await compressEcheckPhotoForUpload(issuePhoto)
+        await uploadOperationalIssuePhoto(portalToken, issue.id, file)
+      }
+      // Execução continua — não altera item/result.
+      const refreshed = await fetchCheckExecution(portalToken, execution.id)
+      setExecution(refreshed)
+      setIssueSuccess(true)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Falha ao enviar problema.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center gap-2 py-16 text-sm text-slate-600">
@@ -249,6 +301,95 @@ export function CheckTargetScanPage() {
     const item = items[activeItemIndex]
     const allDone = items.every(itemDone)
     const canComplete = allDone
+
+    if (issueMode) {
+      const itemLabel =
+        issueMode === 'item' ? item?.itemNameSnapshot ?? 'Item' : null
+      return (
+        <div className="space-y-3 py-1">
+          <PortalSectionCard title="Relatar problema" description={target.name}>
+            <div className="space-y-4 px-4 py-4">
+              {itemLabel ? (
+                <p className="text-sm font-medium text-slate-800">{itemLabel}</p>
+              ) : (
+                <p className="text-sm text-slate-600">Problema geral deste local</p>
+              )}
+              {error ? (
+                <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>
+              ) : null}
+              {issueSuccess ? (
+                <div className="space-y-3 text-center">
+                  <CheckCircle2 className="mx-auto h-9 w-9 text-emerald-600" />
+                  <p className="text-sm font-semibold text-slate-900">Problema enviado</p>
+                  <p className="text-xs text-slate-600">Você pode continuar a verificação.</p>
+                  <button
+                    type="button"
+                    onClick={closeIssueForm}
+                    className="flex h-11 w-full items-center justify-center rounded-xl bg-brand-cobalt text-sm font-semibold text-white"
+                  >
+                    Voltar ao item
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <label className="grid gap-1.5">
+                    <span className="text-xs font-medium text-slate-600">Descrição</span>
+                    <textarea
+                      className="min-h-[6rem] w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm"
+                      value={issueDescription}
+                      onChange={(e) => setIssueDescription(e.target.value)}
+                      placeholder="O que está errado?"
+                    />
+                  </label>
+                  <div>
+                    <p className="mb-2 text-xs font-medium text-slate-600">Foto (opcional)</p>
+                    <input
+                      ref={issuePhotoInputRef}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0] ?? null
+                        e.target.value = ''
+                        setIssuePhoto(f)
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => issuePhotoInputRef.current?.click()}
+                      className="inline-flex h-11 items-center gap-2 rounded-xl border border-dashed border-slate-300 px-3 text-sm text-slate-700"
+                    >
+                      <Camera className="h-4 w-4" />
+                      {issuePhoto ? 'Trocar foto' : 'Tirar foto'}
+                    </button>
+                    {issuePhoto ? (
+                      <p className="mt-1 text-xs text-slate-500">{issuePhoto.name}</p>
+                    ) : null}
+                  </div>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void submitIssue()}
+                    className="flex h-12 w-full items-center justify-center rounded-xl bg-rose-600 text-sm font-semibold text-white disabled:opacity-40"
+                  >
+                    {busy ? 'Enviando...' : 'Enviar problema'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={closeIssueForm}
+                    className="flex h-10 w-full items-center justify-center text-sm text-slate-500"
+                  >
+                    Cancelar
+                  </button>
+                </>
+              )}
+            </div>
+          </PortalSectionCard>
+        </div>
+      )
+    }
 
     return (
       <div className="space-y-3 py-1">
@@ -341,15 +482,19 @@ export function CheckTargetScanPage() {
                     type="button"
                     disabled={savingItemId === item.id || busy}
                     onClick={() => void saveItemResult(item, choice)}
-                    className={`h-11 rounded-xl text-sm font-semibold ${
-                      choice.result === 'problem'
-                        ? 'border border-rose-200 bg-rose-50 text-rose-800'
-                        : 'bg-brand-cobalt text-white'
-                    }`}
+                    className="h-11 rounded-xl bg-brand-cobalt text-sm font-semibold text-white"
                   >
                     {savingItemId === item.id ? 'Salvando...' : choice.label}
                   </button>
                 ))}
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => openIssueForm('item')}
+                  className="h-11 rounded-xl border border-rose-200 bg-rose-50 text-sm font-semibold text-rose-800"
+                >
+                  Problema
+                </button>
               </div>
 
               {items.length > 1 ? (
@@ -375,6 +520,15 @@ export function CheckTargetScanPage() {
             </div>
           </PortalSectionCard>
         ) : null}
+
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => openIssueForm('target')}
+          className="flex h-10 w-full items-center justify-center text-sm font-medium text-rose-700"
+        >
+          Relatar problema neste local
+        </button>
 
         <button
           type="button"
