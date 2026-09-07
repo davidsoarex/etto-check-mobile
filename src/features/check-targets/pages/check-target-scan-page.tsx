@@ -22,6 +22,10 @@ import {
   type PortalResolveResponse,
 } from '@/features/check-targets/api/check-targets-api'
 import { useCheckTargetImagePreviews } from '@/features/check-targets/hooks/use-check-target-image-previews'
+import {
+  OPERATIONAL_ISSUE_IMPACTS,
+  type OperationalIssueImpact,
+} from '@/features/activities/api/activities-api'
 
 type Phase = 'target' | 'execution' | 'done'
 
@@ -34,8 +38,9 @@ function itemButtons(responseType: string): Array<{ result: string; label: strin
   }
   if (responseType === 'action') {
     return [
-      { result: 'no_action', label: 'Nenhuma ação necessária', actionTaken: 'none' },
+      { result: 'no_action', label: 'Não precisou agir', actionTaken: 'none' },
       { result: 'action_taken', label: 'Abastecido', actionTaken: 'refilled' },
+      { result: 'action_taken', label: 'Esvaziado', actionTaken: 'emptied' },
     ]
   }
   return [{ result: 'done', label: 'Concluído' }]
@@ -58,6 +63,7 @@ export function CheckTargetScanPage() {
   const [activeItemIndex, setActiveItemIndex] = useState(0)
   const [issueMode, setIssueMode] = useState<'item' | 'target' | null>(null)
   const [issueDescription, setIssueDescription] = useState('')
+  const [issueImpact, setIssueImpact] = useState<OperationalIssueImpact>('degraded')
   const [issuePhoto, setIssuePhoto] = useState<File | null>(null)
   const [issueSuccess, setIssueSuccess] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -205,6 +211,7 @@ export function CheckTargetScanPage() {
   function openIssueForm(mode: 'item' | 'target') {
     setIssueMode(mode)
     setIssueDescription('')
+    setIssueImpact('degraded')
     setIssuePhoto(null)
     setIssueSuccess(false)
     setError(null)
@@ -213,6 +220,7 @@ export function CheckTargetScanPage() {
   function closeIssueForm() {
     setIssueMode(null)
     setIssueDescription('')
+    setIssueImpact('degraded')
     setIssuePhoto(null)
     setIssueSuccess(false)
   }
@@ -233,9 +241,12 @@ export function CheckTargetScanPage() {
               portalToken,
               execution.id,
               execution.items[activeItemIndex]!.id,
-              { description },
+              { description, operationalImpact: issueImpact },
             )
-          : await reportExecutionIssue(portalToken, execution.id, { description })
+          : await reportExecutionIssue(portalToken, execution.id, {
+              description,
+              operationalImpact: issueImpact,
+            })
       if (issuePhoto) {
         const { file } = await compressEcheckPhotoForUpload(issuePhoto)
         await uploadOperationalIssuePhoto(portalToken, issue.id, file)
@@ -341,6 +352,25 @@ export function CheckTargetScanPage() {
                       placeholder="O que está errado?"
                     />
                   </label>
+                  <fieldset className="space-y-2">
+                    <legend className="text-xs font-semibold text-slate-600">Impacto no trabalho</legend>
+                    <div className="flex flex-wrap gap-2">
+                      {OPERATIONAL_ISSUE_IMPACTS.map((opt) => (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          className={`rounded-full px-3 py-1.5 text-xs font-semibold ring-1 ${
+                            issueImpact === opt.value
+                              ? 'bg-brand-deep text-white ring-brand-deep'
+                              : 'bg-white text-slate-800 ring-slate-300'
+                          }`}
+                          onClick={() => setIssueImpact(opt.value)}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </fieldset>
                   <div>
                     <p className="mb-2 text-xs font-medium text-slate-600">Foto (opcional)</p>
                     <input

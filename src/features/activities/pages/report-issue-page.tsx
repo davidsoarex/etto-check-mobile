@@ -4,6 +4,7 @@ import { Camera, ChevronLeft } from 'lucide-react'
 import { useAuth } from '@/features/auth/context/use-auth'
 import { PortalSectionCard } from '@/components/portal-section-card'
 import {
+  OPERATIONAL_ISSUE_IMPACTS,
   reportOperationalIssue,
   uploadIssueAttachment,
   type OperationalIssueImpact,
@@ -18,12 +19,6 @@ const PROBLEM_TYPES = [
   { value: 'seguranca', label: 'Segurança / risco' },
   { value: 'outro', label: 'Outro' },
 ] as const
-
-const IMPACTS: { value: OperationalIssueImpact; label: string }[] = [
-  { value: 'blocked', label: 'Não consigo seguir o trabalho' },
-  { value: 'degraded', label: 'Consigo trabalhar com dificuldade' },
-  { value: 'normal', label: 'Trabalho segue, mas precisa atenção' },
-]
 
 export function ReportIssuePage() {
   const { activityId: activityIdParam } = useParams()
@@ -154,7 +149,7 @@ export function ReportIssuePage() {
           <fieldset className="space-y-2">
             <legend className="text-xs font-semibold text-slate-600">Impacto no trabalho</legend>
             <div className="flex flex-wrap gap-2">
-              {IMPACTS.map((opt) => (
+              {OPERATIONAL_ISSUE_IMPACTS.map((opt) => (
                 <button
                   key={opt.value}
                   type="button"
