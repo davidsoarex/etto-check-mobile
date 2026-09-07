@@ -10,6 +10,7 @@ import {
   History,
   ListTodo,
   LogOut,
+  ScanLine,
   ShieldCheck,
   User,
 } from 'lucide-react'
@@ -217,6 +218,13 @@ export function HomePage() {
           Atalhos
         </p>
         <div className="grid grid-cols-2 gap-2.5">
+          <ShortcutTile
+            to="/escanear"
+            title="Escanear"
+            subtitle="QR de local ou equipamento"
+            icon={ScanLine}
+            tone="teal"
+          />
           <ShortcutTile
             to="/atividades"
             title="Atividades"
