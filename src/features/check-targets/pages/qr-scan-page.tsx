@@ -1,37 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowLeft, ScanLine } from 'lucide-react'
+import { ArrowLeft, Camera, ScanLine } from 'lucide-react'
 import {
   parseCheckTargetQr,
   parseCheckTargetQrMessage,
 } from '@/features/check-targets/lib/parse-check-target-qr'
-
-type NativeBarcodeDetector = {
-  detect: (source: ImageBitmapSource) => Promise<Array<{ rawValue?: string }>>
-}
-
-type NativeBarcodeDetectorCtor = new (options?: { formats?: string[] }) => NativeBarcodeDetector
-
-function getBarcodeDetectorCtor(): NativeBarcodeDetectorCtor | null {
-  return (
-    (globalThis as unknown as { BarcodeDetector?: NativeBarcodeDetectorCtor }).BarcodeDetector ??
-    null
-  )
-}
-
-async function createQrDetector(): Promise<NativeBarcodeDetector | null> {
-  const Ctor = getBarcodeDetectorCtor()
-  if (!Ctor) return null
-  try {
-    return new Ctor({ formats: ['qr_code'] })
-  } catch {
-    try {
-      return new Ctor()
-    } catch {
-      return null
-    }
-  }
-}
+import { createQrFrameDecoder } from '@/features/check-targets/lib/decode-qr-frame'
+import {
+  attachStreamToVideo,
+  openEcheckCameraStream,
+} from '@/features/check-targets/lib/open-echeck-camera'
 
 /**
  * Scanner in-app: lê QR → /t/:token. Sem API própria.
@@ -43,11 +21,14 @@ export function QrScanPage() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const lockedRef = useRef(false)
+  const runningRef = useRef(false)
+  const [live, setLive] = useState(false)
+  const [starting, setStarting] = useState(false)
   const [cameraError, setCameraError] = useState<string | null>(null)
   const [scanHint, setScanHint] = useState<string | null>(null)
-  const [unsupported, setUnsupported] = useState(false)
 
   const stopCamera = useCallback(() => {
+    runningRef.current = false
     const stream = streamRef.current
     if (stream) {
       for (const track of stream.getTracks()) track.stop()
@@ -55,6 +36,7 @@ export function QrScanPage() {
     }
     const video = videoRef.current
     if (video) video.srcObject = null
+    setLive(false)
   }, [])
 
   const handleRaw = useCallback(
@@ -72,65 +54,83 @@ export function QrScanPage() {
     [navigate, stopCamera],
   )
 
-  useEffect(() => {
-    let cancelled = false
-    let timer = 0
-    lockedRef.current = false
-
-    const release = () => {
-      window.clearTimeout(timer)
-      stopCamera()
+  const startCamera = useCallback(async () => {
+    if (runningRef.current || lockedRef.current) return
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError(
+        'Este navegador não permite câmera no app. Use a câmera do celular no QR da etiqueta.',
+      )
+      return
     }
 
+    runningRef.current = true
+    setStarting(true)
+    setCameraError(null)
+    setScanHint(null)
+
+    try {
+      const stream = await openEcheckCameraStream()
+      if (lockedRef.current) {
+        for (const t of stream.getTracks()) t.stop()
+        runningRef.current = false
+        setStarting(false)
+        return
+      }
+
+      let video = videoRef.current
+      if (!video) {
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+        video = videoRef.current
+      }
+      if (!video) {
+        for (const t of stream.getTracks()) t.stop()
+        runningRef.current = false
+        setStarting(false)
+        setCameraError('Não foi possível ligar o preview da câmera. Toque para tentar de novo.')
+        return
+      }
+
+      streamRef.current = stream
+      await attachStreamToVideo(video, stream)
+      setLive(true)
+      setStarting(false)
+    } catch {
+      runningRef.current = false
+      setStarting(false)
+      setLive(false)
+      setCameraError(
+        'Não foi possível abrir a câmera. Permita o acesso nas configurações do navegador, ou use a câmera do celular na etiqueta.',
+      )
+    }
+  }, [])
+
+  useEffect(() => {
+    lockedRef.current = false
+    void startCamera()
+    return () => {
+      lockedRef.current = true
+      stopCamera()
+    }
+  }, [startCamera, stopCamera])
+
+  useEffect(() => {
+    if (!live) return
+    const watchdog = window.setTimeout(() => {
+      const video = videoRef.current
+      if (!video || video.videoWidth > 0) return
+      stopCamera()
+      setCameraError(null)
+    }, 1800)
+    return () => window.clearTimeout(watchdog)
+  }, [live, stopCamera])
+
+  useEffect(() => {
+    if (!live) return
+    let cancelled = false
+    let timer = 0
+
     void (async () => {
-      if (!navigator.mediaDevices?.getUserMedia) {
-        setCameraError('Este navegador não permite câmera no app. Use a câmera do celular no QR da etiqueta.')
-        setUnsupported(true)
-        return
-      }
-
-      const detector = await createQrDetector()
-      if (cancelled) return
-      if (!detector) {
-        setUnsupported(true)
-        setCameraError(
-          'Leitura de QR neste navegador não está disponível. Use a câmera do celular na etiqueta (abre check.etto.one) — é o caminho oficial.',
-        )
-        return
-      }
-
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: false,
-          video: {
-            facingMode: { ideal: 'environment' },
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-          },
-        })
-        if (cancelled) {
-          for (const t of stream.getTracks()) t.stop()
-          return
-        }
-        streamRef.current = stream
-        const video = videoRef.current
-        if (!video) {
-          for (const t of stream.getTracks()) t.stop()
-          return
-        }
-        video.setAttribute('playsinline', 'true')
-        video.setAttribute('webkit-playsinline', 'true')
-        video.srcObject = stream
-        await video.play()
-      } catch {
-        if (!cancelled) {
-          setCameraError(
-            'Não foi possível abrir a câmera. Permita o acesso ou use a câmera do celular na etiqueta.',
-          )
-        }
-        return
-      }
-
+      const decoder = await createQrFrameDecoder()
       const tick = async () => {
         if (cancelled || lockedRef.current) return
         const video = videoRef.current
@@ -151,8 +151,7 @@ export function QrScanPage() {
           canvas.height = h
           ctx.drawImage(video, 0, 0, w, h)
           try {
-            const codes = await detector.detect(canvas)
-            const raw = codes.map((c) => c.rawValue?.trim()).find((v) => v && v.length > 0)
+            const raw = await decoder.detect(canvas)
             if (raw) {
               handleRaw(raw)
               return
@@ -165,15 +164,16 @@ export function QrScanPage() {
           void tick()
         }, 120)
       }
-
       void tick()
     })()
 
     return () => {
       cancelled = true
-      release()
+      window.clearTimeout(timer)
     }
-  }, [handleRaw, stopCamera])
+  }, [live, handleRaw])
+
+  const showStartOverlay = !live && !starting
 
   return (
     <section className="flex min-h-[70vh] flex-col gap-3">
@@ -191,22 +191,54 @@ export function QrScanPage() {
         </div>
       </header>
 
-      <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-950 shadow-sm">
+      <div className="relative aspect-[3/4] overflow-hidden rounded-2xl border border-slate-200 bg-slate-900 shadow-sm">
         <video
           ref={videoRef}
-          className="aspect-[3/4] w-full object-cover"
+          className="absolute inset-0 h-full w-full object-contain"
           muted
           playsInline
           autoPlay
+          disablePictureInPicture
         />
         <canvas ref={canvasRef} className="hidden" />
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <div className="h-48 w-48 rounded-2xl border-2 border-white/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]" />
-        </div>
-        <div className="absolute bottom-3 left-3 right-3 flex items-center gap-2 rounded-xl bg-black/55 px-3 py-2 text-xs text-white">
-          <ScanLine className="size-4 shrink-0 opacity-90" />
-          <span>Aponte para o QR da etiqueta</span>
-        </div>
+        {live ? (
+          <div className="pointer-events-none absolute inset-0">
+            <div className="absolute inset-x-0 top-0 h-[18%] bg-black/35" />
+            <div className="absolute inset-x-0 bottom-0 h-[18%] bg-black/35" />
+            <div className="absolute inset-y-[18%] left-0 w-[10%] bg-black/35" />
+            <div className="absolute inset-y-[18%] right-0 w-[10%] bg-black/35" />
+            <div className="absolute left-[10%] right-[10%] top-[18%] bottom-[18%] rounded-2xl border-2 border-white/85" />
+          </div>
+        ) : null}
+        {live ? (
+          <div className="absolute bottom-3 left-3 right-3 flex items-center gap-2 rounded-xl bg-black/55 px-3 py-2 text-xs text-white">
+            <ScanLine className="size-4 shrink-0 opacity-90" />
+            <span>Aponte para o QR da etiqueta</span>
+          </div>
+        ) : null}
+        {starting ? (
+          <div className="absolute inset-0 grid place-items-center bg-slate-900/80 px-6 text-center text-sm text-white">
+            Abrindo câmera…
+          </div>
+        ) : null}
+        {showStartOverlay ? (
+          <button
+            type="button"
+            className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-900 px-6 text-center"
+            onClick={() => {
+              lockedRef.current = false
+              void startCamera()
+            }}
+          >
+            <span className="grid size-14 place-items-center rounded-full bg-white/10 text-white">
+              <Camera className="size-7" />
+            </span>
+            <span className="text-sm font-semibold text-white">Toque para ligar a câmera</span>
+            <span className="text-xs text-white/70">
+              Necessário no iPhone e em alguns Androids para o preview aparecer.
+            </span>
+          </button>
+        ) : null}
       </div>
 
       {cameraError ? (
@@ -221,17 +253,10 @@ export function QrScanPage() {
         </p>
       ) : null}
 
-      {unsupported ? (
-        <p className="text-xs leading-relaxed text-slate-500">
-          O scanner in-app é uma conveniência. O caminho oficial continua sendo a câmera do celular
-          abrindo o link <span className="font-medium text-slate-700">check.etto.one/t/…</span> da
-          etiqueta.
-        </p>
-      ) : (
-        <p className="text-xs text-slate-500">
-          QR de outro app ou código de barras não abre verificação. Só etiquetas E.Check.
-        </p>
-      )}
+      <p className="text-xs leading-relaxed text-slate-500">
+        Se a câmera não abrir no app, use a câmera do celular na etiqueta — o caminho oficial continua
+        sendo o link <span className="font-medium text-slate-700">check.etto.one/t/…</span>.
+      </p>
     </section>
   )
 }
