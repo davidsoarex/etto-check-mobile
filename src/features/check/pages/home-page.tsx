@@ -10,6 +10,7 @@ import {
   History,
   ListTodo,
   LogOut,
+  MapPin,
   ScanLine,
   ShieldCheck,
   User,
@@ -112,7 +113,7 @@ function StatChip({
 }
 
 export function HomePage() {
-  const { portalToken, collaboratorName, logout, canValidateSubmissions, hasRoutineAccess } =
+  const { portalToken, collaboratorName, logout, canValidateSubmissions, hasRoutineAccess, canManageCheckTargets } =
     useAuth()
   const [sessions, setSessions] = useState<EcheckRoutineSession[]>([])
   const [inbox, setInbox] = useState<ActivitiesInboxResponse | null>(null)
@@ -225,6 +226,15 @@ export function HomePage() {
             icon={ScanLine}
             tone="teal"
           />
+          {canManageCheckTargets ? (
+            <ShortcutTile
+              to="/gestao/locais"
+              title="Gestão"
+              subtitle="Locais e equipamentos"
+              icon={MapPin}
+              tone="slate"
+            />
+          ) : null}
           <ShortcutTile
             to="/atividades"
             title="Atividades"
