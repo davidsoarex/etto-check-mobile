@@ -13,6 +13,7 @@ export type AuthContextValue = {
   isSupervisor: boolean
   hasRoutineAccess: boolean
   canValidateSubmissions: boolean
+  canManageCheckTargets: boolean
   login: (input: LoginInput) => Promise<void>
   logout: () => void
 }
