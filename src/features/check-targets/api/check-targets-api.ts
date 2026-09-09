@@ -189,6 +189,19 @@ export async function uploadCheckExecutionEvidence(
   )
 }
 
+export async function verifyCheckExecutionItem(
+  token: string,
+  executionId: number,
+  itemId: number,
+  evidenceId: number,
+): Promise<import('@/features/check-targets/lib/visual-verify').VisualVerifyDto> {
+  return requestJson(
+    `echeck_portal/check_executions/${executionId}/items/${itemId}/verify`,
+    { method: 'POST', body: JSON.stringify({ evidenceId }) },
+    token,
+  )
+}
+
 export async function completeCheckExecution(
   token: string,
   executionId: number,
