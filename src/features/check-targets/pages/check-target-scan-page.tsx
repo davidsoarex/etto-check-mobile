@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { Camera, CheckCircle2, Loader2, XCircle } from 'lucide-react'
 import { useAuth } from '@/features/auth/context/use-auth'
 import { PortalSectionCard } from '@/components/portal-section-card'
+import { PhotoLightbox } from '@/components/photo-lightbox'
 import { compressEcheckPhotoForUpload } from '@/lib/compress-echeck-photo'
 import {
   cancelCheckExecution,
@@ -45,6 +46,37 @@ function itemDone(item: PortalExecutionItem): boolean {
   return Boolean(item.result?.trim())
 }
 
+function CheckTargetPhotoThumb({
+  url,
+  label,
+  placeholder,
+  onOpen,
+}: {
+  url: string | null
+  label: string
+  placeholder: string
+  onOpen: (src: string, label: string) => void
+}) {
+  if (!url) {
+    return (
+      <div className="grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-lg bg-slate-100 text-[10px] text-slate-400">
+        {placeholder}
+      </div>
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      className="h-20 w-20 shrink-0 overflow-hidden rounded-lg bg-slate-100 ring-1 ring-slate-200"
+      onClick={() => onOpen(url, label)}
+      aria-label={`Ampliar ${label}`}
+    >
+      <img src={url} alt="" className="h-full w-full object-cover" />
+    </button>
+  )
+}
+
 export function CheckTargetScanPage() {
   const { token: qrToken } = useParams<{ token: string }>()
   const { portalToken } = useAuth()
@@ -60,6 +92,7 @@ export function CheckTargetScanPage() {
   const [issueDescription, setIssueDescription] = useState('')
   const [issuePhoto, setIssuePhoto] = useState<File | null>(null)
   const [issueSuccess, setIssueSuccess] = useState(false)
+  const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const issuePhotoInputRef = useRef<HTMLInputElement>(null)
   const pendingPhotoItemId = useRef<number | null>(null)
@@ -100,6 +133,15 @@ export function CheckTargetScanPage() {
   }, [execution, activeItemIndex])
 
   const { entryFor } = useCheckTargetImagePreviews(portalToken ?? undefined, previewKeys)
+
+  const closeLightbox = useCallback(() => setLightbox(null), [])
+  const openLightbox = useCallback((src: string, alt: string) => {
+    setLightbox({ src, alt })
+  }, [])
+
+  useEffect(() => {
+    setLightbox(null)
+  }, [activeItemIndex])
 
   async function handleStart() {
     if (!portalToken || !resolved || busy) return
@@ -426,21 +468,19 @@ export function CheckTargetScanPage() {
                     {item.referenceAttachments!.map((ref) => {
                       const preview = entryFor('ref', ref.id)
                       return (
-                        <div
+                        <CheckTargetPhotoThumb
                           key={ref.id}
-                          className="h-20 w-20 shrink-0 overflow-hidden rounded-lg bg-slate-100"
-                        >
-                          {preview.url ? (
-                            <img src={preview.url} alt="" className="h-full w-full object-cover" />
-                          ) : (
-                            <div className="grid h-full place-items-center text-[10px] text-slate-400">
-                              ref
-                            </div>
-                          )}
-                        </div>
+                          url={preview.url}
+                          placeholder="ref"
+                          label={`Referência — ${item.itemNameSnapshot}`}
+                          onOpen={openLightbox}
+                        />
                       )
                     })}
                   </div>
+                  {item.referenceAttachments!.some((ref) => entryFor('ref', ref.id).url) ? (
+                    <p className="mt-1.5 text-[11px] text-slate-500">Toque para ampliar</p>
+                  ) : null}
                 </div>
               ) : null}
 
@@ -453,14 +493,13 @@ export function CheckTargetScanPage() {
                   {(item.evidences ?? []).map((ev) => {
                     const preview = entryFor('evidence', ev.id)
                     return (
-                      <div
+                      <CheckTargetPhotoThumb
                         key={ev.id}
-                        className="h-20 w-20 overflow-hidden rounded-lg bg-slate-100"
-                      >
-                        {preview.url ? (
-                          <img src={preview.url} alt="" className="h-full w-full object-cover" />
-                        ) : null}
-                      </div>
+                        url={preview.url}
+                        placeholder=""
+                        label={`Evidência — ${item.itemNameSnapshot}`}
+                        onOpen={openLightbox}
+                      />
                     )
                   })}
                   <button
@@ -473,6 +512,9 @@ export function CheckTargetScanPage() {
                     {item.requirePhotoSnapshot ? 'Tirar foto' : 'Adicionar foto'}
                   </button>
                 </div>
+                {(item.evidences ?? []).some((ev) => entryFor('evidence', ev.id).url) ? (
+                  <p className="mt-1.5 text-[11px] text-slate-500">Toque para ampliar</p>
+                ) : null}
               </div>
 
               <div className="grid gap-2">
@@ -547,6 +589,12 @@ export function CheckTargetScanPage() {
           <XCircle className="h-4 w-4" />
           Cancelar verificação
         </button>
+        <PhotoLightbox
+          open={Boolean(lightbox)}
+          src={lightbox?.src ?? null}
+          alt={lightbox?.alt ?? 'Foto'}
+          onClose={closeLightbox}
+        />
       </div>
     )
   }
