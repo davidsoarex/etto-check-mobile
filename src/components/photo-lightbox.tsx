@@ -1,3 +1,5 @@
+import { useEffect } from 'react'
+
 type Props = {
   open: boolean
   src: string | null
@@ -6,6 +8,17 @@ type Props = {
 }
 
 export function PhotoLightbox({ open, src, alt, onClose }: Props) {
+  useEffect(() => {
+    if (!open) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      onClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [open, onClose])
+
   if (!open || !src) return null
 
   return (

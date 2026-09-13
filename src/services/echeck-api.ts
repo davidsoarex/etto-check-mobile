@@ -17,6 +17,7 @@ export type EcheckPortalProfile = {
   isSupervisor: boolean
   hasRoutineAccess: boolean
   canValidateSubmissions: boolean
+  canManageCheckTargets?: boolean
 }
 
 export type EcheckMeResponse = EcheckPortalProfile

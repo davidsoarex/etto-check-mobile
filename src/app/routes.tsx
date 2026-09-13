@@ -13,6 +13,9 @@ import { SimpleTaskActivityPage } from '@/features/activities/pages/simple-task-
 import { ReportIssuePage } from '@/features/activities/pages/report-issue-page'
 import { MyIssuesPage } from '@/features/activities/pages/my-issues-page'
 import { CheckTargetScanPage } from '@/features/check-targets/pages/check-target-scan-page'
+import { QrScanPage } from '@/features/check-targets/pages/qr-scan-page'
+import { ManagedTargetsListPage } from '@/features/check-targets/pages/managed-targets-list-page'
+import { ManagedTargetDetailPage } from '@/features/check-targets/pages/managed-target-detail-page'
 import { safeAppReturnPath } from '@/lib/safe-return-path'
 import type { LoginInput } from '@/features/auth/context/auth-context-instance'
 
@@ -55,6 +58,30 @@ export function AppRoutes({ isAuthenticated, onLogin }: AppRoutesProps) {
         element={
           <ProtectedRoute isAuthenticated={isAuthenticated}>
             <HomePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/escanear"
+        element={
+          <ProtectedRoute isAuthenticated={isAuthenticated}>
+            <QrScanPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/gestao/locais"
+        element={
+          <ProtectedRoute isAuthenticated={isAuthenticated}>
+            <ManagedTargetsListPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/gestao/locais/:id"
+        element={
+          <ProtectedRoute isAuthenticated={isAuthenticated}>
+            <ManagedTargetDetailPage />
           </ProtectedRoute>
         }
       />

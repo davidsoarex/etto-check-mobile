@@ -28,11 +28,23 @@ export type PortalCheckTarget = {
   kind: CheckTargetKind | string
   name: string
   code: string
+  parentId?: number | null
   qrToken: string
   deepLink: string
   isActive: boolean
   activeItemCount: number
   items: PortalCheckableItem[]
+}
+
+export type ManagedCheckTargetSummary = {
+  id: number
+  organizationId: number
+  kind: CheckTargetKind | string
+  name: string
+  code: string
+  parentId: number | null
+  isActive: boolean
+  activeItemCount: number
 }
 
 export type PortalResolveResponse = {
@@ -178,6 +190,19 @@ export async function uploadCheckExecutionEvidence(
   )
 }
 
+export async function verifyCheckExecutionItem(
+  token: string,
+  executionId: number,
+  itemId: number,
+  evidenceId: number,
+): Promise<import('@/features/check-targets/lib/visual-verify').VisualVerifyDto> {
+  return requestJson(
+    `echeck_portal/check_executions/${executionId}/items/${itemId}/verify`,
+    { method: 'POST', body: JSON.stringify({ evidenceId }) },
+    token,
+  )
+}
+
 export async function completeCheckExecution(
   token: string,
   executionId: number,
@@ -262,6 +287,44 @@ export async function fetchReferenceAttachmentBlob(
   signal?: AbortSignal,
 ): Promise<string> {
   return requestBlob(`echeck_portal/checkable_item_references/${attachmentId}`, token, signal)
+}
+
+export async function fetchManagedCheckTargets(
+  token: string,
+): Promise<{ data: ManagedCheckTargetSummary[] }> {
+  return requestJson<{ data: ManagedCheckTargetSummary[] }>('echeck_portal/check_targets', {}, token)
+}
+
+export async function fetchManagedCheckTarget(
+  token: string,
+  targetId: number,
+): Promise<PortalCheckTarget> {
+  return requestJson<PortalCheckTarget>(`echeck_portal/check_targets/${targetId}`, {}, token)
+}
+
+export async function uploadManagedItemReference(
+  token: string,
+  itemId: number,
+  file: File,
+): Promise<ReferenceAttachment> {
+  const form = new FormData()
+  form.append('photo', file)
+  return requestJson<ReferenceAttachment>(
+    `echeck_portal/checkable_items/${itemId}/references`,
+    { method: 'POST', body: form },
+    token,
+  )
+}
+
+export async function deleteManagedItemReference(
+  token: string,
+  attachmentId: number,
+): Promise<{ ok: boolean }> {
+  return requestJson<{ ok: boolean }>(
+    `echeck_portal/checkable_item_references/${attachmentId}`,
+    { method: 'DELETE' },
+    token,
+  )
 }
 
 export function kindLabel(kind: string): string {

@@ -10,6 +10,8 @@ import {
   History,
   ListTodo,
   LogOut,
+  MapPin,
+  ScanLine,
   ShieldCheck,
   User,
 } from 'lucide-react'
@@ -111,7 +113,7 @@ function StatChip({
 }
 
 export function HomePage() {
-  const { portalToken, collaboratorName, logout, canValidateSubmissions, hasRoutineAccess } =
+  const { portalToken, collaboratorName, logout, canValidateSubmissions, hasRoutineAccess, canManageCheckTargets } =
     useAuth()
   const [sessions, setSessions] = useState<EcheckRoutineSession[]>([])
   const [inbox, setInbox] = useState<ActivitiesInboxResponse | null>(null)
@@ -217,6 +219,22 @@ export function HomePage() {
           Atalhos
         </p>
         <div className="grid grid-cols-2 gap-2.5">
+          <ShortcutTile
+            to="/escanear"
+            title="Escanear"
+            subtitle="QR de local ou equipamento"
+            icon={ScanLine}
+            tone="teal"
+          />
+          {canManageCheckTargets ? (
+            <ShortcutTile
+              to="/gestao/locais"
+              title="Gestão"
+              subtitle="Locais e equipamentos"
+              icon={MapPin}
+              tone="slate"
+            />
+          ) : null}
           <ShortcutTile
             to="/atividades"
             title="Atividades"

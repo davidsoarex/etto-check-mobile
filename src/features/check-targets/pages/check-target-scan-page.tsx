@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { Camera, CheckCircle2, Loader2, XCircle } from 'lucide-react'
 import { useAuth } from '@/features/auth/context/use-auth'
 import { PortalSectionCard } from '@/components/portal-section-card'
+import { PhotoLightbox } from '@/components/photo-lightbox'
 import { compressEcheckPhotoForUpload } from '@/lib/compress-echeck-photo'
 import {
   cancelCheckExecution,
@@ -17,6 +18,7 @@ import {
   updateCheckExecutionItem,
   uploadCheckExecutionEvidence,
   uploadOperationalIssuePhoto,
+  verifyCheckExecutionItem,
   type PortalExecution,
   type PortalExecutionItem,
   type PortalResolveResponse,
@@ -26,6 +28,14 @@ import {
   OPERATIONAL_ISSUE_IMPACTS,
   type OperationalIssueImpact,
 } from '@/features/activities/api/activities-api'
+import { VisualVerifyCard } from '@/features/check-targets/components/visual-verify-card'
+import {
+  buildVisualVerifyView,
+  isVisualVerifySkipped,
+  latestEvidenceId,
+  shouldIgnoreVerifyResponse,
+  type VisualVerifySlot,
+} from '@/features/check-targets/lib/visual-verify'
 
 type Phase = 'target' | 'execution' | 'done'
 
@@ -50,6 +60,37 @@ function itemDone(item: PortalExecutionItem): boolean {
   return Boolean(item.result?.trim())
 }
 
+function CheckTargetPhotoThumb({
+  url,
+  label,
+  placeholder,
+  onOpen,
+}: {
+  url: string | null
+  label: string
+  placeholder: string
+  onOpen: (src: string, label: string) => void
+}) {
+  if (!url) {
+    return (
+      <div className="grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-lg bg-slate-100 text-[10px] text-slate-400">
+        {placeholder}
+      </div>
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      className="h-20 w-20 shrink-0 overflow-hidden rounded-lg bg-slate-100 ring-1 ring-slate-200"
+      onClick={() => onOpen(url, label)}
+      aria-label={`Ampliar ${label}`}
+    >
+      <img src={url} alt="" className="h-full w-full object-cover" />
+    </button>
+  )
+}
+
 export function CheckTargetScanPage() {
   const { token: qrToken } = useParams<{ token: string }>()
   const { portalToken } = useAuth()
@@ -66,9 +107,13 @@ export function CheckTargetScanPage() {
   const [issueImpact, setIssueImpact] = useState<OperationalIssueImpact>('degraded')
   const [issuePhoto, setIssuePhoto] = useState<File | null>(null)
   const [issueSuccess, setIssueSuccess] = useState(false)
+  const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(null)
+  const [verifyByItem, setVerifyByItem] = useState<Record<number, VisualVerifySlot>>({})
+  const [verifyDisabled, setVerifyDisabled] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const issuePhotoInputRef = useRef<HTMLInputElement>(null)
   const pendingPhotoItemId = useRef<number | null>(null)
+  const verifySeqRef = useRef<Record<number, number>>({})
 
   const loadTarget = useCallback(() => {
     if (!portalToken || !qrToken) return
@@ -107,6 +152,73 @@ export function CheckTargetScanPage() {
 
   const { entryFor } = useCheckTargetImagePreviews(portalToken ?? undefined, previewKeys)
 
+  const closeLightbox = useCallback(() => setLightbox(null), [])
+  const openLightbox = useCallback((src: string, alt: string) => {
+    setLightbox({ src, alt })
+  }, [])
+
+  const runVerify = useCallback(
+    async (itemId: number, evidenceId: number) => {
+      if (!portalToken || !execution || verifyDisabled) return
+      const seq = (verifySeqRef.current[itemId] ?? 0) + 1
+      verifySeqRef.current[itemId] = seq
+      const nextSlot: VisualVerifySlot = {
+        itemId,
+        evidenceId,
+        seq,
+        status: 'loading',
+        dto: null,
+        error: null,
+      }
+      setVerifyByItem((prev) => ({ ...prev, [itemId]: nextSlot }))
+      try {
+        const dto = await verifyCheckExecutionItem(portalToken, execution.id, itemId, evidenceId)
+        if (verifySeqRef.current[itemId] !== seq) return
+        if (isVisualVerifySkipped(dto)) {
+          setVerifyDisabled(true)
+          setVerifyByItem((prev) => {
+            const copy = { ...prev }
+            delete copy[itemId]
+            return copy
+          })
+          return
+        }
+        setVerifyByItem((prev) => {
+          if (shouldIgnoreVerifyResponse({ slot: prev[itemId] ?? null, itemId, evidenceId, seq })) {
+            return prev
+          }
+          return {
+            ...prev,
+            [itemId]: { itemId, evidenceId, seq, status: 'ready', dto, error: null },
+          }
+        })
+      } catch {
+        if (verifySeqRef.current[itemId] !== seq) return
+        setVerifyByItem((prev) => {
+          if (shouldIgnoreVerifyResponse({ slot: prev[itemId] ?? null, itemId, evidenceId, seq })) {
+            return prev
+          }
+          return {
+            ...prev,
+            [itemId]: {
+              itemId,
+              evidenceId,
+              seq,
+              status: 'error',
+              dto: null,
+              error: 'Não foi possível verificar a evidência agora.',
+            },
+          }
+        })
+      }
+    },
+    [execution, portalToken, verifyDisabled],
+  )
+
+  useEffect(() => {
+    setLightbox(null)
+  }, [activeItemIndex])
+
   async function handleStart() {
     if (!portalToken || !resolved || busy) return
     setBusy(true)
@@ -114,6 +226,9 @@ export function CheckTargetScanPage() {
     try {
       const exec = await startOrResumeCheckExecution(portalToken, resolved.target.id)
       setExecution(exec)
+      setVerifyByItem({})
+      setVerifyDisabled(false)
+      verifySeqRef.current = {}
       setPhase(exec.status === 'completed' ? 'done' : 'execution')
       const firstPending = exec.items.findIndex((i) => !itemDone(i))
       setActiveItemIndex(firstPending >= 0 ? firstPending : 0)
@@ -164,9 +279,36 @@ export function CheckTargetScanPage() {
     setError(null)
     try {
       const { file: compressed } = await compressEcheckPhotoForUpload(file)
-      await uploadCheckExecutionEvidence(portalToken, execution.id, itemId, compressed)
-      const refreshed = await fetchCheckExecution(portalToken, execution.id)
-      setExecution(refreshed)
+      const uploaded = await uploadCheckExecutionEvidence(portalToken, execution.id, itemId, compressed)
+      try {
+        const refreshed = await fetchCheckExecution(portalToken, execution.id)
+        setExecution(refreshed)
+      } catch {
+        setExecution((prev) => {
+          if (!prev) return prev
+          return {
+            ...prev,
+            items: prev.items.map((row) =>
+              row.id === itemId
+                ? {
+                    ...row,
+                    evidences: [
+                      ...(row.evidences ?? []),
+                      {
+                        id: uploaded.id,
+                        filePath: '',
+                        originalFileName: null,
+                        mimeType: null,
+                        createdAt: null,
+                      },
+                    ],
+                  }
+                : row,
+            ),
+          }
+        })
+      }
+      await runVerify(itemId, uploaded.id)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Falha no envio da foto.')
     } finally {
@@ -312,6 +454,15 @@ export function CheckTargetScanPage() {
     const item = items[activeItemIndex]
     const allDone = items.every(itemDone)
     const canComplete = allDone
+    const currentEvidenceId = item ? latestEvidenceId(item.evidences) : null
+    const verifyView = buildVisualVerifyView(
+      item ? (verifyByItem[item.id] ?? null) : null,
+      currentEvidenceId,
+    )
+    const firstRef = item?.referenceAttachments?.[0]
+    const lastEv = item?.evidences?.length ? item.evidences[item.evidences.length - 1] : null
+    const refUrl = firstRef ? entryFor('ref', firstRef.id).url : null
+    const evUrl = lastEv ? entryFor('evidence', lastEv.id).url : null
 
     if (issueMode) {
       const itemLabel =
@@ -456,21 +607,19 @@ export function CheckTargetScanPage() {
                     {item.referenceAttachments!.map((ref) => {
                       const preview = entryFor('ref', ref.id)
                       return (
-                        <div
+                        <CheckTargetPhotoThumb
                           key={ref.id}
-                          className="h-20 w-20 shrink-0 overflow-hidden rounded-lg bg-slate-100"
-                        >
-                          {preview.url ? (
-                            <img src={preview.url} alt="" className="h-full w-full object-cover" />
-                          ) : (
-                            <div className="grid h-full place-items-center text-[10px] text-slate-400">
-                              ref
-                            </div>
-                          )}
-                        </div>
+                          url={preview.url}
+                          placeholder="ref"
+                          label={`Referência — ${item.itemNameSnapshot}`}
+                          onOpen={openLightbox}
+                        />
                       )
                     })}
                   </div>
+                  {item.referenceAttachments!.some((ref) => entryFor('ref', ref.id).url) ? (
+                    <p className="mt-1.5 text-[11px] text-slate-500">Toque para ampliar</p>
+                  ) : null}
                 </div>
               ) : null}
 
@@ -483,14 +632,13 @@ export function CheckTargetScanPage() {
                   {(item.evidences ?? []).map((ev) => {
                     const preview = entryFor('evidence', ev.id)
                     return (
-                      <div
+                      <CheckTargetPhotoThumb
                         key={ev.id}
-                        className="h-20 w-20 overflow-hidden rounded-lg bg-slate-100"
-                      >
-                        {preview.url ? (
-                          <img src={preview.url} alt="" className="h-full w-full object-cover" />
-                        ) : null}
-                      </div>
+                        url={preview.url}
+                        placeholder=""
+                        label={`Evidência — ${item.itemNameSnapshot}`}
+                        onOpen={openLightbox}
+                      />
                     )
                   })}
                   <button
@@ -503,7 +651,32 @@ export function CheckTargetScanPage() {
                     {item.requirePhotoSnapshot ? 'Tirar foto' : 'Adicionar foto'}
                   </button>
                 </div>
+                {(item.evidences ?? []).some((ev) => entryFor('evidence', ev.id).url) ? (
+                  <p className="mt-1.5 text-[11px] text-slate-500">Toque para ampliar</p>
+                ) : null}
               </div>
+
+              <VisualVerifyCard
+                view={verifyView}
+                onRetryPhoto={() => openCamera(item.id)}
+                onRetryVerify={
+                  currentEvidenceId != null
+                    ? () => void runVerify(item.id, currentEvidenceId)
+                    : undefined
+                }
+                canOpenReference={Boolean(refUrl)}
+                canOpenEvidence={Boolean(evUrl)}
+                onOpenReference={
+                  refUrl
+                    ? () => openLightbox(refUrl, `Referência — ${item.itemNameSnapshot}`)
+                    : undefined
+                }
+                onOpenEvidence={
+                  evUrl
+                    ? () => openLightbox(evUrl, `Evidência — ${item.itemNameSnapshot}`)
+                    : undefined
+                }
+              />
 
               <div className="grid gap-2">
                 {itemButtons(item.responseTypeSnapshot).map((choice) => (
@@ -577,6 +750,12 @@ export function CheckTargetScanPage() {
           <XCircle className="h-4 w-4" />
           Cancelar verificação
         </button>
+        <PhotoLightbox
+          open={Boolean(lightbox)}
+          src={lightbox?.src ?? null}
+          alt={lightbox?.alt ?? 'Foto'}
+          onClose={closeLightbox}
+        />
       </div>
     )
   }
