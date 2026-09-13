@@ -259,6 +259,13 @@ export async function completeActivity(token: string, activityId: number): Promi
 }
 
 export type OperationalIssueImpact = 'blocked' | 'degraded' | 'normal'
+
+/** Mesma classificação de intensidade em todos os relatos de problema do E.Check. */
+export const OPERATIONAL_ISSUE_IMPACTS: { value: OperationalIssueImpact; label: string }[] = [
+  { value: 'blocked', label: 'Não consigo seguir o trabalho' },
+  { value: 'degraded', label: 'Consigo trabalhar com dificuldade' },
+  { value: 'normal', label: 'Trabalho segue, mas precisa atenção' },
+]
 export type OperationalIssueStatus = 'open' | 'acknowledged' | 'resolved' | 'cancelled'
 
 export type MyOperationalIssue = {

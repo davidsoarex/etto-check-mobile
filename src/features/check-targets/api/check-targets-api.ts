@@ -1,5 +1,6 @@
 import { readPortalErrorMessage } from '@/lib/portal-auth'
 import { API_BASE_URL } from '@/lib/api'
+import type { OperationalIssueImpact } from '@/features/activities/api/activities-api'
 
 export type CheckTargetKind = 'area' | 'room' | 'equipment'
 
@@ -236,7 +237,7 @@ export type PortalContextualIssue = {
 export async function reportExecutionIssue(
   token: string,
   executionId: number,
-  input: { description: string; title?: string; operationalImpact?: string },
+  input: { description: string; title?: string; operationalImpact: OperationalIssueImpact },
 ): Promise<PortalContextualIssue> {
   return requestJson<PortalContextualIssue>(
     `echeck_portal/check_executions/${executionId}/issues`,
@@ -249,7 +250,7 @@ export async function reportExecutionItemIssue(
   token: string,
   executionId: number,
   itemId: number,
-  input: { description: string; title?: string; operationalImpact?: string },
+  input: { description: string; title?: string; operationalImpact: OperationalIssueImpact },
 ): Promise<PortalContextualIssue> {
   return requestJson<PortalContextualIssue>(
     `echeck_portal/check_executions/${executionId}/items/${itemId}/issues`,
